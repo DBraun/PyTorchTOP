@@ -45,13 +45,13 @@ The steps to build a debug-mode Visual Studio solution are similar. Instead of `
     mkdir build_debug
     cd build_debug
     set DEBUG=1
-    cmake -DCMAKE_PREFIX_PATH=/path/to/libtorch ..
+    cmake -DCMAKE_PREFIX_PATH=/path/to/debug/libtorch ..
 
-where you use the path to the *debug* LibTorch download. Now you can build `build_debug\PyTorchTOP.sln` in Debug mode. You can manually copy the `.pdb` files from the LibTorch folder to the `Plugins` folder in order to help with stack traces during debugging.
+You should download the debug version from PyTorch and use its path. Now you can build `build_debug\PyTorchTOP.sln` in Debug mode. You can manually copy the `.pdb` files from the LibTorch folder to the `Plugins` folder in order to help with stack traces during debugging.
 
 ## Background Matte
 
-As an example, this project uses models that have been exported from [Background Matting V2](https://github.com/PeterL1n/BackgroundMattingV2). Follow their links to download their "TorchScript" models and place them in this folder's `models` folder. More information on exporting models in this format is available [here](https://pytorch.org/tutorials/beginner/Intro_to_TorchScript_tutorial.html).
+As an example, this project uses models that have been exported from [Background Matting V2](https://github.com/PeterL1n/BackgroundMattingV2). Follow their links to download their "TorchScript" models and place them in this repo's `models` folder. More information on exporting models in this format is available [here](https://pytorch.org/tutorials/beginner/Intro_to_TorchScript_tutorial.html).
 
 ## Extra Notes
 
