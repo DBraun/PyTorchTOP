@@ -6,7 +6,7 @@ From [https://pytorch.org/](https://pytorch.org/) download, 1.7.1 (stable), Wind
 
 ## CUDA and cuDNN
 
-From NVIDIA, install CUDA 10.1, which will create `C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v10.1`. Download cuDNN 7.6.5 for 10.1 and place the files into this folder too.
+From NVIDIA, install CUDA [10.1](https://developer.nvidia.com/cuda-10.1-download-archive-base?target_os=Windows&target_arch=x86_64&target_version=10&target_type=exenetwork), which will create `C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v10.1`. Download [cuDNN](https://developer.nvidia.com/cudnn) 7.6.5 for 10.1 and place the files into this folder too.
 
 ## [CMake 3.15.1 or higher](https://cmake.org/download/)
 
