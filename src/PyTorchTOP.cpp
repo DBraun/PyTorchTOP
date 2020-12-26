@@ -279,6 +279,7 @@ PyTorchTOP::setModelParameters(const OP_Inputs* inputs) {
 	int Refinesamplepixels = inputs->getParInt("Refinesamplepixels");
 	if (Refinesamplepixels != myRefineSamplePixels) {
 		myModule.setattr("refine_sample_pixels", myRefineSamplePixels);
+		myRefineSamplePixels = Refinesamplepixels;
 	}
 }
 
