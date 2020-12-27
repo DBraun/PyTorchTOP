@@ -56,3 +56,7 @@ As an example, this project uses models that have been exported from [Background
 ## Extra Notes
 
 This example project has been tested with TouchDesigner 2020.28110 and libtorch with CUDA 10.1. We have no control over what CUDA version TouchDesigner uses, so it's important to pick the libtorch version that matches. If you're unsure which version to use, check TouchDesigner's [Release Notes](https://docs.derivative.ca/Release_Notes).
+
+WITH_CUDA 1
+OPENCV_EXTRA_MODULES_PATH C:/Users/davidbraun/Documents/Github/opencv_contrib/modules
+BUILD_opencv_world

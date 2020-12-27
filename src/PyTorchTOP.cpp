@@ -18,6 +18,12 @@
 #include <torch/script.h>
 #include "cuda_runtime.h"
 
+#include "opencv2/core/cuda.hpp"
+#include <opencv2/cudawarping.hpp>
+#include "opencv2/calib3d/calib3d.hpp"
+#include <cuda_profiler_api.h>
+#include <opencv2/cudaimgproc.hpp>
+
 #include <assert.h>
 #ifdef __APPLE__
 #include <OpenGL/gl3.h>
@@ -101,7 +107,9 @@ DestroyTOPInstance(TOP_CPlusPlusBase* instance, TOP_Context *context)
 PyTorchTOP::PyTorchTOP(const OP_NodeInfo* info, TOP_Context *context)
 : myNodeInfo(info), myExecuteCount(0)
 {
-	myError.str("");	
+	myError.str("");
+// > = (cv::cuda::ORB::create()).get();
+
 }
 
 PyTorchTOP::~PyTorchTOP()
@@ -131,6 +139,19 @@ PyTorchTOP::getOutputFormat(TOP_OutputFormat* format, const OP_Inputs *inputs, v
 	format->width = myOutputWidth;
 	format->height = myOutputHeight;
 
+	if (myDoDebug) {
+		format->redChannel = true;
+		format->greenChannel = true;
+		format->blueChannel = true;
+		format->alphaChannel = true;
+		format->bitsPerChannel = 8;
+		format->floatPrecision = false;
+		return true;
+	}
+
+	format->bitsPerChannel = myBytesperoutputchannel * 8;
+	format->floatPrecision = myBytesperoutputchannel > 1;
+
 	format->redChannel = true;
 	format->greenChannel = false;
 	format->blueChannel = false;
@@ -145,9 +166,6 @@ PyTorchTOP::getOutputFormat(TOP_OutputFormat* format, const OP_Inputs *inputs, v
 		format->alphaChannel = true;
 	}
 
-	format->bitsPerChannel = myBytesperoutputchannel*8;
-	format->floatPrecision = myBytesperoutputchannel > 1;
-
 	return true;
 }
 
@@ -159,7 +177,7 @@ torch::Dtype bytesToDtype(int numBytes) {
 		return torch::kFloat16;
 	}
 	else {
-		return torch::kByte;
+		return torch::kUInt8;
 	}
 }
 
@@ -168,20 +186,28 @@ PyTorchTOP::setupLibtorch(int inputWidth, int inputHeight, int inputChannels, to
 
 	try {
 
-		std::cout << "Trying to setup U2NetTOP. Wait for success. " << torch::cuda::is_available() << std::endl;
+		std::cout << "Trying to setup LibTorch. Wait for success. " << torch::cuda::is_available() << std::endl;
 		LoadLibraryA("torch_cuda.dll");
 		LoadLibraryA("c10_cuda.dll");
 
-		std::cout << "    CUDA available?:   " << torch::cuda::is_available() << std::endl;
-		std::cout << "    CUDNN available?:  " << torch::cuda::cudnn_is_available() << std::endl;
+		std::cout << "    CUDA available?:  " << torch::cuda::is_available() << std::endl;
+		std::cout << "    CUDNN available?: " << torch::cuda::cudnn_is_available() << std::endl;
 		std::cout << "    # visible GPU(s): " << torch::cuda::device_count() << std::endl;
 
 		const torch::TensorOptions tensorOptions = torch::TensorOptions(myDevice = myDevice).dtype(dtype);
 		myInputTensorForeground = torch::ones({ 1, inputHeight, inputWidth, inputChannels }, tensorOptions);
 		myInputTensorBackground = torch::ones({ 1, inputHeight, inputWidth, inputChannels }, tensorOptions);
 
-		std::cout << "    Creating CUDA tensor..." << std::endl;
-		std::cout << "CUDA available?:   " << torch::cuda::is_available() << std::endl;
+		// https://github.com/opencv/opencv_contrib/blob/6d5f440402cdcf0a74889178c66fadd83c8199d6/modules/cudafeatures2d/src/orb.cpp#L666
+		// these gray scale mats need to be 8-bit single channel.
+		myGpuBackgroundInputGray = cv::cuda::GpuMat(inputHeight, inputWidth, CV_8UC1);
+		myGpuForegroundInputGray = cv::cuda::GpuMat(inputHeight, inputWidth, CV_8UC1);
+
+		// CV_32FC4
+		myGpuBackgroundInput = cv::cuda::GpuMat(inputHeight, inputWidth, CV_8UC4);
+		myGpuForegroundInput = cv::cuda::GpuMat(inputHeight, inputWidth, CV_8UC4);
+		myGpuWarpedOutput = cv::cuda::GpuMat(inputHeight, inputWidth, CV_8UC4);
+
 	}
 	catch (std::exception& ex) {
 		myError << "Unable to setup libtorch. Error: " << ex.what();
@@ -213,7 +239,9 @@ PyTorchTOP::checkModelFile(const char* newModelFilePath) {
 			return false;
 		}
 
+		std::cout << "Loading model..." << std::endl;
 		myModule = torch::jit::load(newModelFilePath, torch::kCUDA);
+		std::cout << "Loaded model." << std::endl;
 		myModule.eval();
 		myModule.to(torch::kCUDA);
 		myMainModel = std::make_shared<WrapperModel>(myIntermediateDtype, myModule);
@@ -306,6 +334,13 @@ PyTorchTOP::checkInputTOP(const OP_TOPInput* inputTOP, int desiredWidth, int des
 	return true;
 }
 
+struct MyDMatchSorterClass {
+	bool operator() (cv::DMatch match1, cv::DMatch match2) { return (match1.distance < match2.distance); }
+};
+
+//struct MyDMatchSorterClass {
+//	bool operator() (std::vector<cv::DMatch> match1, std::vector<cv::DMatch> match2) { return (match1.at(0).distance < match2.at(0).distance); }
+//};
 
 void
 PyTorchTOP::execute(TOP_OutputFormatSpecs* outputFormat ,
@@ -317,6 +352,8 @@ PyTorchTOP::execute(TOP_OutputFormatSpecs* outputFormat ,
 
 	myError.clear();
 	myError.str("");
+
+	myDoDebug = inputs->getParInt("Debug");
 
 	const OP_TOPInput* foregroundInput = inputs->getInputTOP(0);
 	const OP_TOPInput* backgroundInput = inputs->getInputTOP(1);
@@ -350,19 +387,101 @@ PyTorchTOP::execute(TOP_OutputFormatSpecs* outputFormat ,
 	}
 
 	setModelParameters(inputs);
-			
-	size_t inBytes = (size_t) (myInputWidth) * (size_t) myInputHeight * (size_t)myInputChannels * (size_t) Bytesperinputchannel;
-	
+				
 	cudaError_t cudaErr;
-	cudaErr = cudaMemcpyFromArray(myInputTensorForeground.data_ptr(), foregroundInput->cudaInput, 0, 0, inBytes, cudaMemcpyDeviceToDevice);
+
+	size_t spitch = (size_t)(myInputWidth) * (size_t)myInputChannels * (size_t)Bytesperinputchannel;
+
+	cudaErr = cudaMemcpy2DFromArray(myGpuBackgroundInput.data, spitch, backgroundInput->cudaInput, 0, 0, spitch, myGpuBackgroundInput.rows, cudaMemcpyDeviceToDevice);
 	if (cudaErr != cudaSuccess) {
-		myError << "Unable to CUDA copy to tensor: " << cudaErr;
+		myError << "Unable to GPU Mat: " << cudaErr;
+		return;
+	}
+	cudaErr = cudaMemcpy2DFromArray(myGpuForegroundInput.data, spitch, foregroundInput->cudaInput, 0, 0, spitch, myGpuForegroundInput.rows, cudaMemcpyDeviceToDevice);
+	if (cudaErr != cudaSuccess) {
+		myError << "Unable to GPU Mat: " << cudaErr;
 		return;
 	}
 
-	cudaErr = cudaMemcpyFromArray(myInputTensorBackground.data_ptr(), backgroundInput->cudaInput, 0, 0, inBytes, cudaMemcpyDeviceToDevice);
+	cv::cuda::cvtColor(myGpuBackgroundInput, myGpuBackgroundInputGray, cv::COLOR_RGBA2GRAY);
+	cv::cuda::cvtColor(myGpuForegroundInput, myGpuForegroundInputGray, cv::COLOR_RGBA2GRAY);
+
+	cv::Ptr<cv::cuda::ORB> myDetector = cv::cuda::ORB::create(500);
+	//myDetector->setFastThreshold(20);
+	myDetector->detectAndComputeAsync(myGpuForegroundInputGray, cv::cuda::GpuMat(), myKeypointsForeground_gpu, myDescriptorsForeground);
+	myDetector->convert(myKeypointsForeground_gpu, myKeypointsForeground);
+	myDetector->clear();
+	myDetector->detectAndComputeAsync(myGpuBackgroundInputGray, cv::cuda::GpuMat(), myKeypointsBackground_gpu, myDescriptorsBackground);
+	myDetector->convert(myKeypointsBackground_gpu, myKeypointsBackground);
+
+	myMatcher->clear();
+	myMatcher->match(myDescriptorsBackground, myDescriptorsForeground, myMatches);
+	//myMatcher->knnMatch(myDescriptorsBackground, myDescriptorsForeground, myMatches, 1);
+
+	std::sort(myMatches.begin(), myMatches.end(), MyDMatchSorterClass());
+
+	//std::cout << "num matches: " << myMatches.size() << std::endl;
+
+	// Keep only top 15% best matches. An alternative strategy is "Lowe's ratio test".
+	myMatches.resize(int(myMatches.size() * .15));
+	
+	std::vector<cv::Point2d> points_src;
+	std::vector<cv::Point2d> points_bgr;
+
+	points_src.reserve(myMatches.size());
+	points_bgr.reserve(myMatches.size());
+
+	for (auto match : myMatches)
+	{
+		points_src.push_back(myKeypointsForeground.at(match.trainIdx).pt);
+		points_bgr.push_back(myKeypointsBackground.at(match.queryIdx).pt);
+	}
+	points_src.shrink_to_fit();
+	points_bgr.shrink_to_fit();
+
+	if (points_bgr.size() == 0 || points_src.size() == 0) {
+		myError << "No keypoints were found.";
+		return;
+	}
+
+	if (myDoDebug) {
+		cv::Mat matchesMatOutput;
+		cv::Mat cpu_foreground(myGpuForegroundInput);
+		cv::Mat cpu_background(myGpuBackgroundInput);
+		cv::drawMatches(cpu_background, myKeypointsBackground, cpu_foreground, myKeypointsForeground, myMatches, matchesMatOutput);
+		cv::cvtColor(matchesMatOutput, matchesMatOutput, cv::COLOR_BGRA2RGBA);
+		cv::flip(matchesMatOutput, matchesMatOutput, 0);
+		cv::namedWindow("img_matches", cv::WINDOW_NORMAL);
+		cv:imshow("img_matches", matchesMatOutput);
+	}
+
+	if (points_bgr.size() < 6) {
+		myError << "Not enough keypoints. Only " << points_bgr.size() << " exist." << std::endl;
+		return;
+	}
+
+	double Homographyerrorthreshold = inputs->getParDouble("Homographyerrorthreshold");  // default is 3.
+	cv::Mat H = cv::findHomography(points_bgr, points_src, cv::RANSAC, Homographyerrorthreshold);
+
+	if (H.empty()) {
+		myError << "Find Homography failed.";
+		return;
+	}
+
+	cv::cuda::warpPerspective(myGpuBackgroundInput, myGpuWarpedOutput, H, cv::Size(backgroundInput->width, backgroundInput->height),
+		cv::INTER_LINEAR, cv::BORDER_CONSTANT, 0);
+
+	size_t inBytes = (size_t)(myInputWidth) * (size_t)myInputHeight * (size_t)myInputChannels * (size_t)Bytesperinputchannel;
+
+	cudaErr = cudaMemcpyFromArray(myInputTensorForeground.data_ptr(), foregroundInput->cudaInput, 0, 0, inBytes, cudaMemcpyDeviceToDevice);
 	if (cudaErr != cudaSuccess) {
-		myError << "Unable to CUDA copy to tensor: " << cudaErr;
+		myError << "Unable to CUDA copy to tensor 1: " << cudaErr;
+		return;
+	}
+
+	cudaErr = cudaMemcpy2D(myInputTensorBackground.data_ptr(), spitch, (const void*) myGpuWarpedOutput.data, spitch, spitch, myGpuWarpedOutput.rows, cudaMemcpyDeviceToDevice);
+	if (cudaErr != cudaSuccess) {
+		myError << "Unable to CUDA copy to tensor 2: " << cudaErr;
 		return;
 	}
 
@@ -377,14 +496,26 @@ PyTorchTOP::execute(TOP_OutputFormatSpecs* outputFormat ,
 
 	auto torchOutputPtr = alpha.data_ptr();
 
-	size_t spitch = (size_t) (outputFormat->width) * myOutputNumChannels * myBytesperoutputchannel;
+	spitch = (size_t) (outputFormat->width) * myOutputNumChannels * myBytesperoutputchannel;
 	size_t outPitch = (size_t) (outputFormat->width) * myOutputNumChannels * myBytesperoutputchannel;
 
-	// http://developer.download.nvidia.com/compute/cuda/3_1/toolkit/docs/online/group__CUDART__MEMORY_g1cc6e4eb2a5e0cd2bebbc8ebb4b6c46f.html
-	cudaErr = cudaMemcpy2DToArray(outputFormat->cudaOutput[0], 0, 0, torchOutputPtr, spitch, outPitch, outputFormat->height, cudaMemcpyDeviceToDevice);
-	if (cudaErr != cudaSuccess) {
-		myError << "Error copying tensor result back to TouchDesigner: " << cudaErr;
-		return;
+	//myGpuWarpedOutput.upload(matchesMatOutput);
+
+	if (myDoDebug) {
+
+		cudaErr = cudaMemcpy2DToArray(outputFormat->cudaOutput[0], 0, 0, myGpuWarpedOutput.data, spitch, outPitch, outputFormat->height, cudaMemcpyDeviceToDevice);
+		if (cudaErr != cudaSuccess) {
+			myError << "Error copying tensor result back to TouchDesigner: " << cudaErr;
+			return;
+		}
+	}
+	else {
+		// http://developer.download.nvidia.com/compute/cuda/3_1/toolkit/docs/online/group__CUDART__MEMORY_g1cc6e4eb2a5e0cd2bebbc8ebb4b6c46f.html
+		cudaErr = cudaMemcpy2DToArray(outputFormat->cudaOutput[0], 0, 0, torchOutputPtr, spitch, outPitch, outputFormat->height, cudaMemcpyDeviceToDevice);
+		if (cudaErr != cudaSuccess) {
+			myError << "Error copying tensor result back to TouchDesigner: " << cudaErr;
+			return;
+		}
 	}
 
 }
@@ -605,6 +736,48 @@ PyTorchTOP::setupParameters(OP_ParameterManager* manager, void* reserved)
 		np.label = "Refine Sample Pixels";
 
 		OP_ParAppendResult res = manager->appendInt(np, 1);
+		assert(res == OP_ParAppendResult::Success);
+	}
+
+	{
+		OP_NumericParameter np;
+		np.page = "Matte";
+		np.name = "Homographyenable";
+		np.defaultValues[0] = 0;
+
+		np.label = "Homography Enable";
+
+		OP_ParAppendResult res = manager->appendToggle(np);
+		assert(res == OP_ParAppendResult::Success);
+	}
+
+	{
+		OP_NumericParameter np;
+		np.page = "Matte";
+		np.name = "Homographyerrorthreshold";
+		np.defaultValues[0] = 3.;
+		np.clampMins[0] = true;
+		np.clampMaxes[0] = false;
+		np.minValues[0] = 0.;
+		np.maxValues[0] = 3;
+		np.minSliders[0] = 0.;
+		np.maxSliders[0] = 3.;
+
+		np.label = "Homography Error Threshold";
+
+		OP_ParAppendResult res = manager->appendFloat(np);
+		assert(res == OP_ParAppendResult::Success);
+	}
+
+	{
+		OP_NumericParameter np;
+		np.page = "Matte";
+		np.name = "Debug";
+		np.defaultValues[0] = 0;
+
+		np.label = "Debug";
+
+		OP_ParAppendResult res = manager->appendToggle(np);
 		assert(res == OP_ParAppendResult::Success);
 	}
 

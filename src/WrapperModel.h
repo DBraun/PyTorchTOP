@@ -19,6 +19,14 @@ struct WrapperModel : torch::nn::Module {
 		auto rgb_foreground = rgba_foreground.narrow(3, 0, 3).permute({ 0, 3, 1, 2 }).to(myModelInputDtype);
 		auto rgb_background = rgba_background.narrow(3, 0, 3).permute({ 0, 3, 1, 2 }).to(myModelInputDtype);
 
+		if (rgba_foreground.dtype() == torch::kByte) {
+			rgb_foreground /= 255.;
+			rgb_background /= 255.;
+		}
+
+		//std::cout << "torch max: " << torch::max(rgb_foreground) << std::endl;
+		//std::cout << "torch min: " << torch::min(rgb_foreground) << std::endl;
+
 		auto outputs = myModule.forward({ rgb_foreground, rgb_background }).toTuple()->elements();
 		auto pha = outputs[0].toTensor();
 

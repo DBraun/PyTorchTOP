@@ -15,6 +15,10 @@
 #include "TOP_CPlusPlusBase.h"
 #include <torch/torch.h>
 #include "WrapperModel.h"
+#include <opencv2/opencv.hpp>
+#include <opencv2/core.hpp>
+#include <opencv2/cudafeatures2d.hpp>
+
 using namespace std::chrono;
 
 class PyTorchTOP : public TOP_CPlusPlusBase
@@ -93,4 +97,25 @@ private:
 
 	void setModelParameters(const OP_Inputs *inputs);
 
+	cv::cuda::GpuMat myGpuWarpedOutput;
+	cv::cuda::GpuMat myGpuForegroundInput;
+	cv::cuda::GpuMat myGpuBackgroundInput;
+
+	cv::cuda::GpuMat myGpuForegroundInputGray;
+	cv::cuda::GpuMat myGpuBackgroundInputGray;
+	
+	cv::cuda::GpuMat myKeypointsForeground_gpu;
+	cv::cuda::GpuMat myKeypointsBackground_gpu;
+
+	std::vector<cv::KeyPoint> myKeypointsForeground;
+	std::vector<cv::KeyPoint> myKeypointsBackground;
+
+	cv::cuda::GpuMat myDescriptorsForeground;
+	cv::cuda::GpuMat myDescriptorsBackground;
+
+	std::vector<cv::DMatch > myMatches;
+	//std::vector<std::vector<cv::DMatch> > myMatches;
+	bool myDoDebug = false;
+	cv::Ptr<cv::cuda::DescriptorMatcher> myMatcher = cv::cuda::DescriptorMatcher::createBFMatcher(cv::NORM_HAMMING);  // NORM_HAMMING is for ORB.
+	
 };
