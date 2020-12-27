@@ -1,12 +1,12 @@
 # PyTorchTOP
 
-This project demonstrates how to use OpenCV with CUDA modules and PyTorch in a TouchDesigner Custom Operator. Building this project is moderately complex and time-consuming, so read all the instructions to get a general overview before getting started.
+This project demonstrates how to use OpenCV with CUDA modules and PyTorch/LibTorch in a TouchDesigner Custom Operator. Building this project is moderately complex and time-consuming, so read all the instructions to get a general overview before getting started.
 
 ## Background Matting Project
 
-PyTorchTOP uses [Background Matting v2](https://github.com/PeterL1n/BackgroundMattingV2) as a foundation because their project is MIT-licensed (thank you!). Their research paper focuses on the speed and quality of the matting operation. For their quantitative results, they preprocess the images with OpenCV and don't add this computational cost to their numbers. It is *ok* to not preprocess the images but only if the frozen background image does not need to be transformed to match the live foreground images. This optional transformation is called homography in OpenCV. To see how the researchers do it, look at their [HomographicAlignment](https://github.com/PeterL1n/BackgroundMattingV2/blob/97e2df124d0fa96eb7f101961a2eb806cdd25049/inference_utils.py#L6) class. PyTorchTOP has a toggle for using CUDA contrib modules from OpenCV to do the same homography efficiently on the GPU.
+PyTorchTOP uses [Background Matting v2](https://github.com/PeterL1n/BackgroundMattingV2) as a foundation because their project is MIT-licensed (thank you!). Their research paper focuses on the speed and quality of the matting operation. For their quantitative results, they preprocess the images with OpenCV and don't add this computational cost to their numbers. It is *ok* to not preprocess the images but only if the frozen background image does not need to be transformed to match the live foreground images. This optional transformation is called [homography](https://docs.opencv.org/master/d7/dff/tutorial_feature_homography.html) in OpenCV. To see how the researchers do it, look at their [HomographicAlignment](https://github.com/PeterL1n/BackgroundMattingV2/blob/97e2df124d0fa96eb7f101961a2eb806cdd25049/inference_utils.py#L6) class. PyTorchTOP has a toggle for using CUDA contrib modules from OpenCV to do the same homography efficiently on the GPU.
 
-PyTorchTOP uses TorchScript models that can be downloaded from from [Background Matting V2](https://github.com/PeterL1n/BackgroundMattingV2). Follow their links to download their "TorchScript" models and place them in this repo's `models` folder. More information on exporting models in this format is available [here](https://pytorch.org/tutorials/beginner/Intro_to_TorchScript_tutorial.html).
+PyTorchTOP uses TorchScript models that can be downloaded from [Background Matting V2](https://github.com/PeterL1n/BackgroundMattingV2). Follow their links to download their "TorchScript" models and place them in this repo's `models` folder. More information on exporting models in this format is available [here](https://pytorch.org/tutorials/beginner/Intro_to_TorchScript_tutorial.html).
 
 ## Python
 
@@ -22,18 +22,18 @@ From NVIDIA, install CUDA which will create `C:\Program Files\NVIDIA GPU Computi
 
 ## OpenCV and the Contrib modules.
 
-Use git to clone [OpenCV](https://github.com/opencv/opencv) and [OpenCV Contrib](https://github.com/opencv/opencv_contrib). It would be good to place them next to each other. Use [CMake-GUI](https://cmake.org/download/) to select the source folder of OpenCV. In CMake-GUI, for the box `Where is the source code`, select the path to OpenCV. For `Where to build the binaries`, one suggestion is to create a `build` folder inside the OpenCV repo. You should permanently edit your system environment variables so that `OpenCV_DIR` holds this path. Press `Configure`. It will take some time, and eventually a table with lots of options will appear. Make the following modifications to the entries.
+Use git to clone [OpenCV](https://github.com/opencv/opencv) and [OpenCV Contrib](https://github.com/opencv/opencv_contrib). It would be good to place them next to each other. Use [CMake-GUI](https://cmake.org/download/) to select the source folder of OpenCV. In CMake-GUI, for the box `Where is the source code`, select the path to OpenCV. For `Where to build the binaries`, one suggestion is to create a `build` folder inside the OpenCV repo. You should permanently edit your system environment variables so that `OpenCV_DIR` holds this path. In CMake-GUI, press `Configure`. It will take some time, and eventually a table with lots of options will appear. Make the following modifications to the entries.
 
-* Enable the checkbox `WITH_CUDA`
+* Enable the checkbox `WITH_CUDA`.
 * For `CUDA_TOOLKIT_ROOT_DIR`, enter `C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.0`
 * For `OPENCV_EXTRA_MODULES_PATH`, enter the path to `modules` folder in the opencv_contrib repository which you cloned earlier.
 * Enable the checkbox `BUILD_opencv_world`.
 
-Click `Generate`, and then `Open Project`. Build in `Release` mode. This will take between 1 to 2 hours. When it's complete, look for the "world" dll (`opencv_world451.dll` or equivalent) in the build's `bin\Release` folder and move it to `C:\Users\admin\Documents\Derivative\Plugins`, replacing `admin` with your user name. If this folder doesn't already exist, create it.
+Click `Generate`, and then `Open Project`. Build in `Release` mode. This will take between 1 to 2 hours. When it's complete, look for the "world" dll (`opencv_world451.dll` or equivalent) in the build's `bin\Release` folder and move it to `%USERPROFILE%\Documents\Derivative\Plugins`. If this folder doesn't already exist, create it.
 
 ## Building the PyTorchTOP Project.
 
-The following steps rely on CUDA and cuDNN being in your system path. If you have multiple versions of CUDA installed, you can temporarily modify your path to make sure the right one is on top. For example, since we're using CUDA 11.0, in a command window
+The following steps rely on CUDA and cuDNN being in your system path. If you have multiple versions of CUDA installed, you can temporarily modify your path to make sure the right one is on top. For example, since we're using CUDA 11.0, in a command window, do the following:
 
     set CUDA_HOME=C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.0
     set CUDA_PATH=C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.0
@@ -75,4 +75,4 @@ The steps to build a debug-mode Visual Studio solution are similar. You should d
 
 ## Extra Notes
 
-This example project has been tested with TouchDesigner 2020.28110 and libtorch with CUDA 11.0. At the time of writing, this TouchDesigner is using 10.1, so it's risky to use 11.0. Luckily it works. Choose your versions of the various components in this project at your own discretion. TouchDesigner's [Release Notes](https://docs.derivative.ca/Release_Notes) often mention changes to their CUDA version.
+This example project has been tested with TouchDesigner 2020.28110 and libtorch with CUDA 11.0. At the time of writing this, TouchDesigner is using 10.1, so it's risky to use 11.0. Luckily it works. Choose your versions of the various components in this project at your own discretion. TouchDesigner's [Release Notes](https://docs.derivative.ca/Release_Notes) often mention changes to their CUDA version.
