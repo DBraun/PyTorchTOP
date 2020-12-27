@@ -75,27 +75,33 @@ private:
 	torch::Tensor myInputTensorBackground;
 	torch::jit::script::Module myModule;
 	std::shared_ptr<WrapperModel> myMainModel;
-
-	torch::Dtype myInputDtype;
 	torch::Dtype myIntermediateDtype;
 
+	int myInputWidth = 1280;
+	int myInputHeight = 720;
+	int myInputNumChannels = 1;
+	size_t myBytesPerInputChannel = 0; // initializing it to zero forces allocateGPU_textures to run once at startup.
+
+	int myOutputWidth = 1280;
+	int myOutputHeight = 720;
 	int myOutputNumChannels = 1;
-	size_t myBytesperoutputchannel = 4;
+	size_t myBytesPerOutputChannel = 4;
 
-	// make sure the CUDA backend of libtorch is loaded and we can create an input cuda tensor.
-	bool setupLibtorch(int width, int height, int channels, torch::Dtype dtype);
-
-	// make sure the trained model file is loaded.
 	bool checkModelFile(const char* newModelFilePath);
+
+	void setModelParameters(const OP_Inputs* inputs);
 
 	bool checkInputTOP(const OP_TOPInput* inputTOP, int desiredWidth, int desiredHeight);
 
-	bool myHasSetup = false;
+	bool prepareEverything(const OP_Inputs* inputs);
+	bool allocateGPU_textures();
+
+	void executeWithHomography(TOP_OutputFormatSpecs* outputFormat, const OP_Inputs* inputs);
+	void executeWithoutHomography(TOP_OutputFormatSpecs* outputFormat, const OP_Inputs* inputs);
+
 	int myRefineMode = 0; // TODO: make this an enum.
 	int myBackboneScale = 0; // TODO: make this an enum.
-	int myRefineSamplePixels = 0;
-
-	void setModelParameters(const OP_Inputs *inputs);
+	int myRefineSamplePixels = 80000;
 
 	cv::cuda::GpuMat myGpuWarpedOutput;
 	cv::cuda::GpuMat myGpuForegroundInput;
@@ -114,8 +120,6 @@ private:
 	cv::cuda::GpuMat myDescriptorsBackground;
 
 	std::vector<cv::DMatch > myMatches;
-	//std::vector<std::vector<cv::DMatch> > myMatches;
-	bool myDoDebug = false;
+
 	cv::Ptr<cv::cuda::DescriptorMatcher> myMatcher = cv::cuda::DescriptorMatcher::createBFMatcher(cv::NORM_HAMMING);  // NORM_HAMMING is for ORB.
-	
 };
