@@ -126,6 +126,10 @@ target_link_libraries(${PROJECT_NAME} ${CUDA_CUDA_LIBRARY} ${CMAKE_DL_LIBS})
 find_package(Torch REQUIRED)
 
 target_link_libraries(${PROJECT_NAME} "${TORCH_LIBRARIES}")
+
+FIND_PACKAGE( OpenCV REQUIRED )
+TARGET_LINK_LIBRARIES (${PROJECT_NAME} ${OpenCV_LIBS})
+
 set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 17)
 
 # The following step will create a post-build event that copies the custom DLL to
