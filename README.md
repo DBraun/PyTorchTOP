@@ -22,7 +22,7 @@ From NVIDIA, install CUDA which will create `C:\Program Files\NVIDIA GPU Computi
 
 ## OpenCV and the Contrib modules.
 
-Use git to clone [OpenCV](https://github.com/opencv/opencv) and [OpenCV Contrib](https://github.com/opencv/opencv_contrib). It would be good to place them next to each other. Use [CMake-GUI](https://cmake.org/download/) to select the source folder of OpenCV. In CMake-GUI, for the box `Where is the source code`, select the path to OpenCV. For `Where to build the binaries`, one suggestion is to create a `build` folder inside the OpenCV repo. You should permanently edit your system environment variables so that `OpenCV_DIR` holds this path. In CMake-GUI, press `Configure`. It will take some time, and eventually a table with lots of options will appear. Make the following modifications to the entries.
+Use git to clone [OpenCV](https://github.com/opencv/opencv) and [OpenCV Contrib](https://github.com/opencv/opencv_contrib). It would be good to place them next to each other. Use [CMake-GUI](https://cmake.org/download/) to select the source folder of OpenCV. In CMake-GUI, for the box `Where is the source code`, select the path to OpenCV. For `Where to build the binaries`, one suggestion is to create a `build` folder inside the OpenCV repo. You should permanently edit your system environment variables so that `OpenCV_DIR` holds this path. In CMake-GUI, press `Configure`. In the pop-up, select the latest version of Visual Studio, possibly Visual Studio 16 2019, and `Finish`. It will take less than a minute, and a table with lots of options will appear. Make the following modifications:
 
 * Enable the checkbox `WITH_CUDA`.
 * For `CUDA_TOOLKIT_ROOT_DIR`, enter `C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.0`
