@@ -18,18 +18,21 @@ From [https://pytorch.org/](https://pytorch.org/) download, 1.7.1 (stable), Wind
 
 ## CUDA and cuDNN
 
-From NVIDIA, install CUDA which will create `C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.0`. Download the [cuDNN](https://developer.nvidia.com/cudnn) version that corresponds to the CUDA version and place the files in the CUDA folder too.
+From NVIDIA, install CUDA which will create `C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.0`. Check that this creates a system environment variable: `CUDA_TOOLKIT_ROOT_DIR` holding `C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.0`. Download the [cuDNN](https://developer.nvidia.com/cudnn) version that corresponds to the CUDA version and place the files in the CUDA folder too.
 
 ## OpenCV and the Contrib modules.
 
 Use git to clone [OpenCV](https://github.com/opencv/opencv) and [OpenCV Contrib](https://github.com/opencv/opencv_contrib). It would be good to place them next to each other. Use [CMake-GUI](https://cmake.org/download/) to select the source folder of OpenCV. In CMake-GUI, for the box `Where is the source code`, select the path to OpenCV. For `Where to build the binaries`, one suggestion is to create a `build` folder inside the OpenCV repo. You should permanently edit your system environment variables so that `OpenCV_DIR` holds this path. In CMake-GUI, press `Configure`. In the pop-up, select the latest version of Visual Studio, possibly Visual Studio 16 2019, and `Finish`. It will take less than a minute, and a table with lots of options will appear. Make the following modifications:
 
-* Enable the checkbox `WITH_CUDA`.
-* For `CUDA_TOOLKIT_ROOT_DIR`, enter `C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.0`
-* For `OPENCV_EXTRA_MODULES_PATH`, enter the path to `modules` folder in the opencv_contrib repository which you cloned earlier.
 * Enable the checkbox `BUILD_opencv_world`.
+* For `OPENCV_EXTRA_MODULES_PATH`, enter the path to `modules` folder in the opencv_contrib repository which you cloned earlier.
+* Enable the checkbox `WITH_CUDA`.
 
-Click `Generate`, and then `Open Project`. Build in `Release` mode. This will take between 1 to 2 hours. When it's complete, look for the "world" dll (`opencv_world451.dll` or equivalent) in the build's `bin\Release` folder and move it to `%USERPROFILE%\Documents\Derivative\Plugins`. If this folder doesn't already exist, create it.
+Click `Generate`.
+
+Check the entries in the table again. You should see a new entry for `CUDA_TOOLKIT_ROOT_DIR`, holding `C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.0`. If you don't, you may add the entry yourself, but this isn't guaranteed to work. You should probably check your CUDA installation, delete the CMake-GUI cache and restart the CMake-GUI steps.
+
+If `CUDA_TOOLKIT_ROOT_DIR` is valid, then click `Open Project`. Build in `Release` mode. This will take between 1 to 2 hours. When it's complete, look for the "world" dll (`opencv_world451.dll` or equivalent) in the build's `bin\Release` folder and move it to `%USERPROFILE%\Documents\Derivative\Plugins`. If this folder doesn't already exist, create it.
 
 ## Building the PyTorchTOP Project.
 
