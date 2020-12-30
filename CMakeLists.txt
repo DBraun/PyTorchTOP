@@ -139,7 +139,7 @@ if (MSVC)
                      POST_BUILD
                      COMMAND ${CMAKE_COMMAND} -E copy_if_different
                      "$<TARGET_FILE:PyTorchTOP>"
-                     %USERPROFILE%/Documents/Derivative/Plugins)
+                     "%USERPROFILE%/Documents/Derivative/Plugins")
 
   ## Move torch DLLs to that folder too.
   file(GLOB TORCH_DLLS "${TORCH_INSTALL_PREFIX}/lib/*.dll")
@@ -147,7 +147,7 @@ if (MSVC)
                      POST_BUILD
                      COMMAND ${CMAKE_COMMAND} -E copy_if_different
                      ${TORCH_DLLS}
-                     %USERPROFILE%/Documents/Derivative/Plugins)
+                     "%USERPROFILE%/Documents/Derivative/Plugins")
 endif (MSVC)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES
