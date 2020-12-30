@@ -36,13 +36,17 @@ If `CUDA_TOOLKIT_ROOT_DIR` is valid, then click `Open Project`. Build in `Releas
 
 ## Building the PyTorchTOP Project.
 
-The following steps rely on CUDA and cuDNN being in your system path. If you have multiple versions of CUDA installed, you can temporarily modify your path to make sure the right one is on top. For example, since we're using CUDA 11.0, in a command window, do the following:
+To get started, we must first make sure several environment variables are correct. The process of installing CUDA and cuDNN should have already put them in your system path. If you have multiple versions of CUDA installed, you can temporarily modify your path to make sure the right one is found first. For example, since we're using CUDA 11.0, in a command window, do the following:
 
     set CUDA_HOME=C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.0
     set CUDA_PATH=C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.0
     set PATH=%CUDA_HOME%;%CUDA_PATH%;%PATH%
 
-This changes your system path but only in this command window. With the same window, inside the root of `PyTorchTOP` create a build folder:
+This changes your system path but only in this command window. Furthermore, we need an environment variable `OpenCV_DIR` to be set to the path where OpenCV was built, such as `C:/opencv/build`. If you haven't set this variable, you can do it temporarily with the right path.
+
+	set OpenCV_DIR=C:/opencv/build
+
+ With the same window, inside the root of `PyTorchTOP` create a build folder:
 
     mkdir build
     cd build
