@@ -467,7 +467,7 @@ PyTorchTOP::executeWithHomography(TOP_OutputFormatSpecs* outputFormat, const OP_
 		cv::cvtColor(matchesMatOutput, matchesMatOutput, cv::COLOR_BGRA2RGBA);
 		cv::flip(matchesMatOutput, matchesMatOutput, 0);
 		cv::namedWindow("img_matches", cv::WINDOW_KEEPRATIO);
-		cv:imshow("img_matches", matchesMatOutput);
+		cv::imshow("img_matches", matchesMatOutput);
 	}
 
 	double Homographyerrorthreshold = inputs->getParDouble("Homographyerrorthreshold");  // default is 3.0
