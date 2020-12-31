@@ -23,7 +23,9 @@ stays the same, otherwise changes won't be backwards compatible
 
 
 #ifdef _WIN32
-	#define NOMINMAX
+	#ifndef NOMINMAX
+		#define NOMINMAX
+	#endif
 	#include <windows.h>
 	#include <stdint.h>
 	#include "GL_Extensions.h"
