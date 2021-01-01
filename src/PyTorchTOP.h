@@ -99,9 +99,9 @@ private:
 	void executeWithHomography(TOP_OutputFormatSpecs* outputFormat, const OP_Inputs* inputs);
 	void executeWithoutHomography(TOP_OutputFormatSpecs* outputFormat, const OP_Inputs* inputs);
 
-	int myRefineMode = 0; // TODO: make this an enum.
-	int myBackboneScale = 0; // TODO: make this an enum.
-	int myRefineSamplePixels = 80000;
+	int myRefineMode = -1; // TODO: make this an enum. -1 forces update at startup.
+	int myBackboneScale = -1; // TODO: make this an enum. -1 forces update at startup.
+	int myRefineSamplePixels = -1; // NB: -1 forces update at startup.
 
 	cv::cuda::GpuMat myGpuWarpedOutput;
 	cv::cuda::GpuMat myGpuForegroundInput;

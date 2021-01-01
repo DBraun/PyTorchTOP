@@ -326,46 +326,47 @@ PyTorchTOP::setModelParameters(const OP_Inputs* inputs) {
 	int Refinemode = inputs->getParInt("Refinemode");
 	if (Refinemode != myRefineMode) {
 		switch (Refinemode) {
-
-		case 0:
-			myModule.setattr("refine_mode", "full");
-			break;
-		case 1:
-			myModule.setattr("refine_mode", "sampling");
-			break;
-		case 2:
-			myModule.setattr("refine_mode", "thresholding");
-			break;
-		default:
-			myModule.setattr("refine_mode", "full");
-			break;
+			case 0:
+				myModule.setattr("refine_mode", "full");
+				break;
+			case 1:
+				myModule.setattr("refine_mode", "sampling");
+				break;
+			case 2:
+				myModule.setattr("refine_mode", "thresholding");
+				break;
+			default:
+				myModule.setattr("refine_mode", "full");
+				break;
 		}
 		myRefineMode = Refinemode;
 	}
 
 	int Backbonescale = inputs->getParInt("Backbonescale");
 	if (Backbonescale != myBackboneScale) {
-		switch (Refinemode) {
-
-		case 0:
-			myModule.setattr("backbone_scale", 0.25);
-			break;
-		case 1:
-			myModule.setattr("backbone_scale", 0.5);
-			break;
-		case 2:
-			myModule.setattr("backbone_scale", 1.0);
-			break;
-		default:
-			myModule.setattr("backbone_scale", 1.0);
-			break;
+		switch (Backbonescale) {
+			case 0:
+				myModule.setattr("backbone_scale", 0.125);
+				break;
+			case 1:
+				myModule.setattr("backbone_scale", 0.25);
+				break;
+			case 2:
+				myModule.setattr("backbone_scale", 0.5);
+				break;
+			case 3:
+				myModule.setattr("backbone_scale", 1.0);
+				break;
+			default:
+				myModule.setattr("backbone_scale", .25);
+				break;
 		}
 		myBackboneScale = Backbonescale;
 	}
 
 	int Refinesamplepixels = inputs->getParInt("Refinesamplepixels");
 	if (Refinesamplepixels != myRefineSamplePixels) {
-		myModule.setattr("refine_sample_pixels", myRefineSamplePixels);
+		myModule.setattr("refine_sample_pixels", Refinesamplepixels);
 		myRefineSamplePixels = Refinesamplepixels;
 	}
 }
@@ -805,10 +806,10 @@ PyTorchTOP::setupParameters(OP_ParameterManager* manager, void* reserved)
 
 		sp.defaultValue = "quarter";
 
-		const char* names[] = { "Quarter", "Half", "One" };
-		const char* labels[] = { "Quarter", "Half", "One" };
+		const char* names[] = { "Eighth", "Quarter", "Half", "One" };
+		const char* labels[] = { "Eighth", "Quarter", "Half", "One" };
 
-		OP_ParAppendResult res = manager->appendMenu(sp, 3, names, labels);
+		OP_ParAppendResult res = manager->appendMenu(sp, 4, names, labels);
 		assert(res == OP_ParAppendResult::Success);
 	}
 
