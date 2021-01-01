@@ -6,7 +6,7 @@ This project demonstrates how to use OpenCV with CUDA modules and PyTorch/LibTor
 
 PyTorchTOP uses [Background Matting v2](https://github.com/PeterL1n/BackgroundMattingV2) as a foundation because their project is MIT-licensed (thank you!). Their research paper focuses on the speed and quality of the matting operation. For their quantitative results, they preprocess the images with OpenCV and don't add this computational cost to their numbers. It is *ok* to not preprocess the images but only if the frozen background image does not need to be transformed to match the live foreground images. This optional transformation is called [homography](https://docs.opencv.org/master/d7/dff/tutorial_feature_homography.html) in OpenCV. To see how the researchers do it, look at their [HomographicAlignment](https://github.com/PeterL1n/BackgroundMattingV2/blob/97e2df124d0fa96eb7f101961a2eb806cdd25049/inference_utils.py#L6) class. PyTorchTOP has a toggle for using CUDA contrib modules from OpenCV to do the same homography efficiently on the GPU.
 
-PyTorchTOP uses TorchScript models that can be downloaded from [Background Matting V2](https://github.com/PeterL1n/BackgroundMattingV2). Follow their links to download their "TorchScript" models and place them in this repo's `models` folder. More information on exporting models in this format is available [here](https://pytorch.org/tutorials/beginner/Intro_to_TorchScript_tutorial.html).
+PyTorchTOP uses TorchScript models that can be [downloaded](https://github.com/PeterL1n/BackgroundMattingV2#download) from [Background Matting V2](https://github.com/PeterL1n/BackgroundMattingV2). Download their "TorchScript" models and place them in this repo's `models` folder. More information on exporting models in this format is available [here](https://pytorch.org/tutorials/beginner/Intro_to_TorchScript_tutorial.html).
 
 ## Python
 
@@ -79,6 +79,10 @@ The steps to build a debug-mode Visual Studio solution are similar. You should d
     cmake -DCMAKE_PREFIX_PATH=/path/to/debug/libtorch ..
 
  Now you can build `build_debug\PyTorchTOP.sln` in Debug mode. You can manually copy the `.pdb` files from the LibTorch folder to the `Plugins` folder in order to help with stack traces during debugging. You may also consider duplicating the steps for building OpenCV in debug mode.
+
+## Using the TouchDesigner project
+
+When the project opens, check the Model path parameter on the plugin. If you select a 32-bit model, then the custom parameter for Bytes Per Model Input should be 4 because 4 bytes is 32 bits. If the model is 16-bit, then select 2. Then toggle the "Unload Plugin" parameter to load the plugin. The first input to the plugin is the live video and the second input is the static background image.
 
 ## Extra Notes
 
