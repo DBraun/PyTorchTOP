@@ -60,7 +60,7 @@ where `/path/to/libtorch` should be the full path to the unzipped LibTorch distr
 	-- Caffe2: CUDA nvcc is: C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.0/bin/nvcc.exe
 	-- Caffe2: CUDA toolkit directory: C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.0
 	-- Caffe2: Header version is: 11.0
-	-- Found cuDNN: v7.6.5  (include: C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.0/include, library: C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.0/lib/x64/cudnn.lib)
+	-- Found cuDNN: v8.0.5  (include: C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.0/include, library: C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.0/lib/x64/cudnn.lib)
 	-- Autodetected CUDA architecture(s):  7.5
 	-- Added CUDA NVCC flags for: -gencode;arch=compute_75,code=sm_75
 	-- Configuring done
