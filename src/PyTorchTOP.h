@@ -72,7 +72,6 @@ private:
 	// torch vars
 	torch::Device myDevice = torch::kCUDA;
 	torch::Tensor myInputTensorForeground;
-	torch::Tensor myInputTensorBackground;
 	torch::jit::script::Module myModule;
 	std::shared_ptr<WrapperModel> myMainModel;
 	torch::Dtype myIntermediateDtype;
@@ -95,31 +94,4 @@ private:
 
 	bool prepareEverything(const OP_Inputs* inputs);
 	bool allocateGPU_textures();
-
-	void executeWithHomography(TOP_OutputFormatSpecs* outputFormat, const OP_Inputs* inputs);
-	void executeWithoutHomography(TOP_OutputFormatSpecs* outputFormat, const OP_Inputs* inputs);
-
-	int myRefineMode = -1; // TODO: make this an enum. -1 forces update at startup.
-	int myBackboneScale = -1; // TODO: make this an enum. -1 forces update at startup.
-	int myRefineSamplePixels = -1; // NB: -1 forces update at startup.
-
-	cv::cuda::GpuMat myGpuWarpedOutput;
-	cv::cuda::GpuMat myGpuForegroundInput;
-	cv::cuda::GpuMat myGpuBackgroundInput;
-
-	cv::cuda::GpuMat myGpuForegroundInputGray;
-	cv::cuda::GpuMat myGpuBackgroundInputGray;
-	
-	cv::cuda::GpuMat myKeypointsForeground_gpu;
-	cv::cuda::GpuMat myKeypointsBackground_gpu;
-
-	std::vector<cv::KeyPoint> myKeypointsForeground;
-	std::vector<cv::KeyPoint> myKeypointsBackground;
-
-	cv::cuda::GpuMat myDescriptorsForeground;
-	cv::cuda::GpuMat myDescriptorsBackground;
-
-	std::vector<cv::DMatch > myMatches;
-
-	cv::Ptr<cv::cuda::DescriptorMatcher> myMatcher = cv::cuda::DescriptorMatcher::createBFMatcher(cv::NORM_HAMMING);  // NORM_HAMMING is for ORB.
 };

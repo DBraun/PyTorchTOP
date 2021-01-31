@@ -87,3 +87,7 @@ When the project opens, check the Model path parameter on the plugin. If you sel
 ## Extra Notes
 
 This example project has been tested with TouchDesigner 2020.28110 and libtorch with CUDA 11.0. At the time of writing this, TouchDesigner is using 10.1, so it's risky to use 11.0. Luckily it works. Choose your versions of the various components in this project at your own discretion. TouchDesigner's [Release Notes](https://docs.derivative.ca/Release_Notes) often mention changes to their CUDA version.
+
+## Style Transfer Branch
+
+A [branch](https://github.com/DBraun/PyTorchTOP/tree/model/style-transfer) of this project demonstrates Style Transfer. You should use git to checkout the branch. Then follow the [steps](https://github.com/DBraun/PyTorchTOP-cpumem#neural-style-transfer) in the old PyTorchTOP repository to save "traced_model.pt" to the models folder. For example, you should save "rain_princess_1280x720.pt". Build the `PyTorchTOP.dll`, open `PyTorchTOP.toe` and toggle the button that had unloaded the C++ TOP. You should get about 11 FPS at 1280x720 on an RTX 2080.

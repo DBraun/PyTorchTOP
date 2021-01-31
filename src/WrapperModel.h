@@ -14,22 +14,31 @@ struct WrapperModel : torch::nn::Module {
 		myModule = module;
 	}
 
-	torch::Tensor forward(torch::Tensor rgba_foreground, torch::Tensor rgba_background) {
+	torch::Tensor forward(torch::Tensor rgba_foreground) {
 		// narrow RGBA to RGB, permute to (batch, channels, rows, cols), and convert to data type that the traced model takes.
 		auto rgb_foreground = rgba_foreground.narrow(3, 0, 3).permute({ 0, 3, 1, 2 }).to(myModelInputDtype);
-		auto rgb_background = rgba_background.narrow(3, 0, 3).permute({ 0, 3, 1, 2 }).to(myModelInputDtype);
 
 		if (rgba_foreground.dtype() == torch::kByte && myModelInputDtype != torch::kByte) {
 			rgb_foreground /= 255.;
-			rgb_background /= 255.;
 		}
 
-		auto outputs = myModule.forward({ rgb_foreground, rgb_background }).toTuple()->elements();
-		auto pha = outputs[0].toTensor();
+		// NB: style transfer model outputs [0-255] scale for some reason?
+		// so divide by 255.
+		auto rgb = myModule.forward({ rgb_foreground }).toTensor() / 255.;
 
 		// need to permute to (batch, rows, cols, channels)
-		auto channels_last = pha.permute({ 0, 2, 3, 1 });
-		
-		return channels_last;
+		auto channels_last = rgb.permute({ 0, 2, 3, 1 });
+
+		// add alpha channel
+		auto sizes = channels_last.sizes();
+
+		//std::cout << "sizes " << sizes << std::endl;
+
+		const torch::TensorOptions tensorOptions = torch::TensorOptions(torch::kCUDA).dtype(channels_last.dtype());
+		auto alpha = torch::ones({ sizes[0], sizes[1], sizes[2], 1 }, tensorOptions);
+
+		auto rgba_out = torch::cat({ channels_last, alpha }, -1);
+	
+		return rgba_out;
 	}
 };

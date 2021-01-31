@@ -62,21 +62,21 @@ FillTOPPluginInfo(TOP_PluginInfo *info)
 	// The opType is the unique name for this TOP. It must start with a 
 	// capital A-Z character, and all the following characters must lower case
 	// or numbers (a-z, 0-9)
-	info->customOPInfo.opType->setString("Backgroundmatte");
+	info->customOPInfo.opType->setString("Styletransfer");
 
 	// The opLabel is the text that will show up in the OP Create Dialog
-	info->customOPInfo.opLabel->setString("Background Matte TOP");
+	info->customOPInfo.opLabel->setString("Style Transfer TOP");
 
 	// Will be turned into a 3 letter icon on the nodes
-	info->customOPInfo.opIcon->setString("BMT");
+	info->customOPInfo.opIcon->setString("STT");
 
 	// Information about the author of this OP
 	info->customOPInfo.authorName->setString("David Braun");
 	info->customOPInfo.authorEmail->setString("github.com/DBraun");
 
-	// This TOP requires exactly 2 inputs.
-	info->customOPInfo.minInputs = 2;
-	info->customOPInfo.maxInputs = 2;
+	// This TOP requires exactly 1 input.
+	info->customOPInfo.minInputs = 1;
+	info->customOPInfo.maxInputs = 1;
 }
 
 DLLEXPORT
@@ -140,16 +140,6 @@ PyTorchTOP::getOutputFormat(TOP_OutputFormat* format, const OP_Inputs *inputs, v
 
 	format->width = myOutputWidth;
 	format->height = myOutputHeight;
-
-	if (inputs->getParInt("Outputwarpedbackground")) {
-		format->redChannel = true;
-		format->greenChannel = true;
-		format->blueChannel = true;
-		format->alphaChannel = true;
-		format->bitsPerChannel = 8;
-		format->floatPrecision = false;
-		return true;
-	}
 
 	format->bitsPerChannel = myBytesPerOutputChannel * 8;
 	format->floatPrecision = myBytesPerOutputChannel > 1;
@@ -242,32 +232,6 @@ PyTorchTOP::allocateGPU_textures() {
 	try {
 		const torch::TensorOptions tensorOptions = torch::TensorOptions(myDevice = myDevice).dtype(bytesToDtype(myBytesPerInputChannel));
 		myInputTensorForeground = torch::ones({ 1, myInputHeight, myInputWidth, myInputNumChannels }, tensorOptions);
-		myInputTensorBackground = torch::ones({ 1, myInputHeight, myInputWidth, myInputNumChannels }, tensorOptions);
-
-		// https://github.com/opencv/opencv_contrib/blob/6d5f440402cdcf0a74889178c66fadd83c8199d6/modules/cudafeatures2d/src/orb.cpp#L666
-		// these gray scale mats need to be 8-bit single channel.
-		myGpuBackgroundInputGray = cv::cuda::GpuMat(myInputHeight, myInputWidth, CV_8UC1);
-		myGpuForegroundInputGray = cv::cuda::GpuMat(myInputHeight, myInputWidth, CV_8UC1);
-
-		// CV_32FC4
-		int cv_input_type = 0;
-		cv_input_type = CV_8UC4;
-
-		if (myBytesPerInputChannel == 1 && myInputNumChannels == 4) {
-			cv_input_type = CV_8UC4;
-		}
-		else if (myBytesPerInputChannel == 4 && myInputNumChannels == 4) {
-			cv_input_type = CV_32FC4;
-		}
-		else {
-			// todo: figure out more cases here depending on the needs of the project.
-			// This default case may be incorrect for your project!
-			cv_input_type = CV_8UC4;
-		}
-
-		myGpuBackgroundInput = cv::cuda::GpuMat(myInputHeight, myInputWidth, CV_8UC4);
-		myGpuForegroundInput = cv::cuda::GpuMat(myInputHeight, myInputWidth, CV_8UC4);
-		myGpuWarpedOutput = cv::cuda::GpuMat(myInputHeight, myInputWidth, CV_8UC4);
 
 		return true;
 	}
@@ -323,52 +287,6 @@ PyTorchTOP::checkModelFile(const char* newModelFilePath) {
 
 void
 PyTorchTOP::setModelParameters(const OP_Inputs* inputs) {
-	int Refinemode = inputs->getParInt("Refinemode");
-	if (Refinemode != myRefineMode) {
-		switch (Refinemode) {
-			case 0:
-				myModule.setattr("refine_mode", "full");
-				break;
-			case 1:
-				myModule.setattr("refine_mode", "sampling");
-				break;
-			case 2:
-				myModule.setattr("refine_mode", "thresholding");
-				break;
-			default:
-				myModule.setattr("refine_mode", "full");
-				break;
-		}
-		myRefineMode = Refinemode;
-	}
-
-	int Backbonescale = inputs->getParInt("Backbonescale");
-	if (Backbonescale != myBackboneScale) {
-		switch (Backbonescale) {
-			case 0:
-				myModule.setattr("backbone_scale", 0.125);
-				break;
-			case 1:
-				myModule.setattr("backbone_scale", 0.25);
-				break;
-			case 2:
-				myModule.setattr("backbone_scale", 0.5);
-				break;
-			case 3:
-				myModule.setattr("backbone_scale", 1.0);
-				break;
-			default:
-				myModule.setattr("backbone_scale", .25);
-				break;
-		}
-		myBackboneScale = Backbonescale;
-	}
-
-	int Refinesamplepixels = inputs->getParInt("Refinesamplepixels");
-	if (Refinesamplepixels != myRefineSamplePixels) {
-		myModule.setattr("refine_sample_pixels", Refinesamplepixels);
-		myRefineSamplePixels = Refinesamplepixels;
-	}
 }
 
 bool
@@ -394,144 +312,33 @@ PyTorchTOP::checkInputTOP(const OP_TOPInput* inputTOP, int desiredWidth, int des
 	return true;
 }
 
-struct MyDMatchSorterClass {
-	bool operator() (cv::DMatch match1, cv::DMatch match2) { return (match1.distance < match2.distance); }
-};
 
 void
-PyTorchTOP::executeWithHomography(TOP_OutputFormatSpecs* outputFormat, const OP_Inputs* inputs) {
+PyTorchTOP::execute(TOP_OutputFormatSpecs* outputFormat ,
+							const OP_Inputs* inputs,
+							TOP_Context* context,
+							void* reserved)
+{
+	myExecuteCount++;
+
+	myError.clear();
+	myError.str("");
 
 	const OP_TOPInput* foregroundInput = inputs->getInputTOP(0);
-	const OP_TOPInput* backgroundInput = inputs->getInputTOP(1);
 
-	cudaError_t cudaErr;
-
-	size_t spitch = (size_t)(myInputWidth) * (size_t)myInputNumChannels * (size_t)myBytesPerInputChannel;
-
-	cudaErr = cudaMemcpy2DFromArray(myGpuBackgroundInput.data, spitch, backgroundInput->cudaInput, 0, 0, spitch, myGpuBackgroundInput.rows, cudaMemcpyDeviceToDevice);
-	if (cudaErr != cudaSuccess) {
-		myError << "Unable to GPU Mat: code " << cudaErr;
-		return;
-	}
-	cudaErr = cudaMemcpy2DFromArray(myGpuForegroundInput.data, spitch, foregroundInput->cudaInput, 0, 0, spitch, myGpuForegroundInput.rows, cudaMemcpyDeviceToDevice);
-	if (cudaErr != cudaSuccess) {
-		myError << "Unable to GPU Mat: code " << cudaErr;
-		return;
-	}
-
-	cv::cuda::cvtColor(myGpuBackgroundInput, myGpuBackgroundInputGray, cv::COLOR_RGBA2GRAY);
-	cv::cuda::cvtColor(myGpuForegroundInput, myGpuForegroundInputGray, cv::COLOR_RGBA2GRAY);
-
-	cv::Ptr<cv::cuda::ORB> myDetector = cv::cuda::ORB::create(500);
-	//myDetector->setFastThreshold(20);
-	myDetector->detectAndComputeAsync(myGpuForegroundInputGray, cv::cuda::GpuMat(), myKeypointsForeground_gpu, myDescriptorsForeground);
-	myDetector->convert(myKeypointsForeground_gpu, myKeypointsForeground);
-	myDetector->clear();
-	myDetector->detectAndComputeAsync(myGpuBackgroundInputGray, cv::cuda::GpuMat(), myKeypointsBackground_gpu, myDescriptorsBackground);
-	myDetector->convert(myKeypointsBackground_gpu, myKeypointsBackground);
-
-	myMatcher->clear();
-	myMatcher->match(myDescriptorsBackground, myDescriptorsForeground, myMatches);
-	//myMatcher->knnMatch(myDescriptorsBackground, myDescriptorsForeground, myMatches, 1);
-
-	std::sort(myMatches.begin(), myMatches.end(), MyDMatchSorterClass());
-
-	// Keep only top 15% best matches.
-	// An alternative strategy is "Lowe's ratio test", which seems to be
-	// used with k-nearest neighbors matching.
-	myMatches.resize(int(myMatches.size() * .15));
-
-	std::vector<cv::Point2d> points_src;
-	std::vector<cv::Point2d> points_bgr;
-
-	points_src.reserve(myMatches.size());
-	points_bgr.reserve(myMatches.size());
-
-	for (auto match : myMatches)
+	if (!foregroundInput)
 	{
-		points_src.push_back(myKeypointsForeground.at(match.trainIdx).pt);
-		points_bgr.push_back(myKeypointsBackground.at(match.queryIdx).pt);
-	}
-	points_src.shrink_to_fit();
-	points_bgr.shrink_to_fit();
-
-	if (points_bgr.size() == 0 || points_src.size() == 0) {
-		myError << "No keypoints were found.";
+		myError << "This plugin requires 1 input.";
 		return;
 	}
 
-	if (inputs->getParInt("Showfeaturematches")) {
-		cv::Mat matchesMatOutput;
-		cv::Mat cpu_foreground(myGpuForegroundInput);
-		cv::Mat cpu_background(myGpuBackgroundInput);
-		cv::drawMatches(cpu_background, myKeypointsBackground, cpu_foreground, myKeypointsForeground, myMatches, matchesMatOutput);
-		cv::cvtColor(matchesMatOutput, matchesMatOutput, cv::COLOR_BGRA2RGBA);
-		cv::flip(matchesMatOutput, matchesMatOutput, 0);
-		cv::namedWindow("img_matches", cv::WINDOW_KEEPRATIO);
-		cv::imshow("img_matches", matchesMatOutput);
-	}
-
-	double Homographyerrorthreshold = inputs->getParDouble("Homographyerrorthreshold");  // default is 3.0
-	cv::Mat H = cv::findHomography(points_bgr, points_src, cv::RANSAC, Homographyerrorthreshold);
-
-	if (H.empty()) {
-		myError << "Find Homography failed.";
+	if (!prepareEverything(inputs)) {
 		return;
 	}
 
-	cv::cuda::warpPerspective(myGpuBackgroundInput, myGpuWarpedOutput, H, cv::Size(backgroundInput->width, backgroundInput->height), cv::INTER_LINEAR, cv::BORDER_CONSTANT, 0);
+	if (!checkInputTOP(foregroundInput, myInputWidth, myInputHeight)) return;
 
-	size_t inBytes = (size_t)(myInputWidth) * (size_t)myInputHeight * (size_t)myInputNumChannels * (size_t)myBytesPerInputChannel;
-
-	cudaErr = cudaMemcpyFromArray(myInputTensorForeground.data_ptr(), foregroundInput->cudaInput, 0, 0, inBytes, cudaMemcpyDeviceToDevice);
-	if (cudaErr != cudaSuccess) {
-		myError << "Unable to CUDA copy to tensor 1: code " << cudaErr;
-		return;
-	}
-
-	cudaErr = cudaMemcpy2D(myInputTensorBackground.data_ptr(), spitch, (const void*)myGpuWarpedOutput.data, spitch, spitch, myGpuWarpedOutput.rows, cudaMemcpyDeviceToDevice);
-	if (cudaErr != cudaSuccess) {
-		myError << "Unable to CUDA copy to tensor 2: code " << cudaErr;
-		return;
-	}
-
-	auto start = high_resolution_clock::now();
-
-	auto alpha = myMainModel->forward(myInputTensorForeground, myInputTensorBackground);
-
-	auto stop = high_resolution_clock::now();
-	myDuration = duration_cast<milliseconds>(stop - start);
-
-	//std::cout << alpha.sizes() << std::endl;
-
-	auto torchOutputPtr = alpha.data_ptr();
-
-	spitch = (size_t)(outputFormat->width) * myOutputNumChannels * myBytesPerOutputChannel;
-	size_t outPitch = (size_t)(outputFormat->width) * myOutputNumChannels * myBytesPerOutputChannel;
-
-	if (inputs->getParInt("Outputwarpedbackground")) {
-
-		cudaErr = cudaMemcpy2DToArray(outputFormat->cudaOutput[0], 0, 0, myGpuWarpedOutput.data, spitch, outPitch, outputFormat->height, cudaMemcpyDeviceToDevice);
-		if (cudaErr != cudaSuccess) {
-			myError << "Error copying tensor result back to TouchDesigner: code " << cudaErr;
-			return;
-		}
-	}
-	else {
-		// http://developer.download.nvidia.com/compute/cuda/3_1/toolkit/docs/online/group__CUDART__MEMORY_g1cc6e4eb2a5e0cd2bebbc8ebb4b6c46f.html
-		cudaErr = cudaMemcpy2DToArray(outputFormat->cudaOutput[0], 0, 0, torchOutputPtr, spitch, outPitch, outputFormat->height, cudaMemcpyDeviceToDevice);
-		if (cudaErr != cudaSuccess) {
-			myError << "Error copying tensor result back to TouchDesigner: code " << cudaErr;
-			return;
-		}
-	}
-}
-
-void
-PyTorchTOP::executeWithoutHomography(TOP_OutputFormatSpecs* outputFormat, const OP_Inputs* inputs) {
-
-	const OP_TOPInput* foregroundInput = inputs->getInputTOP(0);
-	const OP_TOPInput* backgroundInput = inputs->getInputTOP(1);
+	setModelParameters(inputs);
 
 	cudaError_t cudaErr;
 
@@ -543,15 +350,9 @@ PyTorchTOP::executeWithoutHomography(TOP_OutputFormatSpecs* outputFormat, const 
 		return;
 	}
 
-	cudaErr = cudaMemcpyFromArray(myInputTensorBackground.data_ptr(), backgroundInput->cudaInput, 0, 0, inBytes, cudaMemcpyDeviceToDevice);
-	if (cudaErr != cudaSuccess) {
-		myError << "Unable to CUDA copy to tensor 1: code " << cudaErr;
-		return;
-	}
-
 	auto start = high_resolution_clock::now();
 
-	auto alpha = myMainModel->forward(myInputTensorForeground, myInputTensorBackground);
+	auto alpha = myMainModel->forward(myInputTensorForeground);
 
 	auto stop = high_resolution_clock::now();
 	myDuration = duration_cast<milliseconds>(stop - start);
@@ -568,44 +369,6 @@ PyTorchTOP::executeWithoutHomography(TOP_OutputFormatSpecs* outputFormat, const 
 	if (cudaErr != cudaSuccess) {
 		myError << "Error copying tensor result back to TouchDesigner: code " << cudaErr;
 		return;
-	}
-	
-}
-
-void
-PyTorchTOP::execute(TOP_OutputFormatSpecs* outputFormat ,
-							const OP_Inputs* inputs,
-							TOP_Context* context,
-							void* reserved)
-{
-	myExecuteCount++;
-
-	myError.clear();
-	myError.str("");
-
-	const OP_TOPInput* foregroundInput = inputs->getInputTOP(0);
-	const OP_TOPInput* backgroundInput = inputs->getInputTOP(1);
-
-	if (!foregroundInput || !backgroundInput)
-	{
-		myError << "This plugin requires 2 inputs.";
-		return;
-	}
-
-	if (!prepareEverything(inputs)) {
-		return;
-	}
-
-	if (!checkInputTOP(foregroundInput, myInputWidth, myInputHeight)) return;
-	if (!checkInputTOP(backgroundInput, myInputWidth, myInputHeight)) return;
-
-	setModelParameters(inputs);
-
-	if (inputs->getParInt("Homographyenable")) {
-		executeWithHomography(outputFormat, inputs);
-	}
-	else {
-		executeWithoutHomography(outputFormat, inputs);
 	}
 
 }
@@ -783,105 +546,105 @@ PyTorchTOP::setupParameters(OP_ParameterManager* manager, void* reserved)
 		assert(res == OP_ParAppendResult::Success);
 	}
 
-	{
-		OP_StringParameter	sp;
-		sp.page = "Matte";
-		sp.name = "Refinemode";
-		sp.label = "Refine Mode";
+	//{
+	//	OP_StringParameter	sp;
+	//	sp.page = "Matte";
+	//	sp.name = "Refinemode";
+	//	sp.label = "Refine Mode";
 
-		sp.defaultValue = "full";
+	//	sp.defaultValue = "full";
 
-		const char* names[] = { "Full", "Sampling", "Thresholding" };
-		const char* labels[] = { "full", "sampling", "thresholding" };
+	//	const char* names[] = { "Full", "Sampling", "Thresholding" };
+	//	const char* labels[] = { "full", "sampling", "thresholding" };
 
-		OP_ParAppendResult res = manager->appendMenu(sp, 3, names, labels);
-		assert(res == OP_ParAppendResult::Success);
-	}
+	//	OP_ParAppendResult res = manager->appendMenu(sp, 3, names, labels);
+	//	assert(res == OP_ParAppendResult::Success);
+	//}
 
-	{
-		OP_StringParameter	sp;
-		sp.page = "Matte";
-		sp.name = "Backbonescale";
-		sp.label = "Backbone Scale";
+	//{
+	//	OP_StringParameter	sp;
+	//	sp.page = "Matte";
+	//	sp.name = "Backbonescale";
+	//	sp.label = "Backbone Scale";
 
-		sp.defaultValue = "quarter";
+	//	sp.defaultValue = "quarter";
 
-		const char* names[] = { "Eighth", "Quarter", "Half", "One" };
-		const char* labels[] = { "Eighth", "Quarter", "Half", "One" };
+	//	const char* names[] = { "Eighth", "Quarter", "Half", "One" };
+	//	const char* labels[] = { "Eighth", "Quarter", "Half", "One" };
 
-		OP_ParAppendResult res = manager->appendMenu(sp, 4, names, labels);
-		assert(res == OP_ParAppendResult::Success);
-	}
+	//	OP_ParAppendResult res = manager->appendMenu(sp, 4, names, labels);
+	//	assert(res == OP_ParAppendResult::Success);
+	//}
 
-	{
-		OP_NumericParameter np;
-		np.page = "Matte";
-		np.name = "Refinesamplepixels";
-		np.defaultValues[0] = 80000;
-		np.minSliders[0] = 0;
-		np.maxSliders[0] = 500000;
-		np.clampMins[0] = true;
-		np.minValues[0] = 0;
+	//{
+	//	OP_NumericParameter np;
+	//	np.page = "Matte";
+	//	np.name = "Refinesamplepixels";
+	//	np.defaultValues[0] = 80000;
+	//	np.minSliders[0] = 0;
+	//	np.maxSliders[0] = 500000;
+	//	np.clampMins[0] = true;
+	//	np.minValues[0] = 0;
 
-		np.label = "Refine Sample Pixels";
+	//	np.label = "Refine Sample Pixels";
 
-		OP_ParAppendResult res = manager->appendInt(np, 1);
-		assert(res == OP_ParAppendResult::Success);
-	}
+	//	OP_ParAppendResult res = manager->appendInt(np, 1);
+	//	assert(res == OP_ParAppendResult::Success);
+	//}
 
-	{
-		OP_NumericParameter np;
-		np.page = "Matte";
-		np.name = "Homographyenable";
-		np.defaultValues[0] = 1;
+	//{
+	//	OP_NumericParameter np;
+	//	np.page = "Matte";
+	//	np.name = "Homographyenable";
+	//	np.defaultValues[0] = 1;
 
-		np.label = "Homography Enable";
+	//	np.label = "Homography Enable";
 
-		OP_ParAppendResult res = manager->appendToggle(np);
-		assert(res == OP_ParAppendResult::Success);
-	}
+	//	OP_ParAppendResult res = manager->appendToggle(np);
+	//	assert(res == OP_ParAppendResult::Success);
+	//}
 
-	{
-		OP_NumericParameter np;
-		np.page = "Matte";
-		np.name = "Homographyerrorthreshold";
-		np.defaultValues[0] = 3.;
-		np.clampMins[0] = true;
-		np.clampMaxes[0] = false;
-		np.minValues[0] = 0.;
-		np.maxValues[0] = 3;
-		np.minSliders[0] = 0.;
-		np.maxSliders[0] = 3.;
+	//{
+	//	OP_NumericParameter np;
+	//	np.page = "Matte";
+	//	np.name = "Homographyerrorthreshold";
+	//	np.defaultValues[0] = 3.;
+	//	np.clampMins[0] = true;
+	//	np.clampMaxes[0] = false;
+	//	np.minValues[0] = 0.;
+	//	np.maxValues[0] = 3;
+	//	np.minSliders[0] = 0.;
+	//	np.maxSliders[0] = 3.;
 
-		np.label = "Homography Error Threshold";
+	//	np.label = "Homography Error Threshold";
 
-		OP_ParAppendResult res = manager->appendFloat(np);
-		assert(res == OP_ParAppendResult::Success);
-	}
+	//	OP_ParAppendResult res = manager->appendFloat(np);
+	//	assert(res == OP_ParAppendResult::Success);
+	//}
 
-	{
-		OP_NumericParameter np;
-		np.page = "Matte";
-		np.name = "Outputwarpedbackground";
-		np.defaultValues[0] = 0;
+	//{
+	//	OP_NumericParameter np;
+	//	np.page = "Matte";
+	//	np.name = "Outputwarpedbackground";
+	//	np.defaultValues[0] = 0;
 
-		np.label = "Output Warped Background";
+	//	np.label = "Output Warped Background";
 
-		OP_ParAppendResult res = manager->appendToggle(np);
-		assert(res == OP_ParAppendResult::Success);
-	}
+	//	OP_ParAppendResult res = manager->appendToggle(np);
+	//	assert(res == OP_ParAppendResult::Success);
+	//}
 
-	{
-		OP_NumericParameter np;
-		np.page = "Matte";
-		np.name = "Showfeaturematches";
-		np.defaultValues[0] = 0;
+	//{
+	//	OP_NumericParameter np;
+	//	np.page = "Matte";
+	//	np.name = "Showfeaturematches";
+	//	np.defaultValues[0] = 0;
 
-		np.label = "Show Feature Matches";
+	//	np.label = "Show Feature Matches";
 
-		OP_ParAppendResult res = manager->appendToggle(np);
-		assert(res == OP_ParAppendResult::Success);
-	}
+	//	OP_ParAppendResult res = manager->appendToggle(np);
+	//	assert(res == OP_ParAppendResult::Success);
+	//}
 
 }
 
